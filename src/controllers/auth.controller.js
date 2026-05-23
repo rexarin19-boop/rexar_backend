@@ -2,7 +2,7 @@ import { HTTP_STATUS } from '../constants/httpStatus.js';
 import * as authService from '../services/auth.service.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 
-export async function verify(req, res) {
+export async function login(req, res) {
   const result = await authService.verifyAndLogin({ idToken: req.body.idToken });
 
   if (result.needsRegistration) {

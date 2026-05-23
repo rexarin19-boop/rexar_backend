@@ -21,6 +21,14 @@ export function errorHandler(err, req, res, _next) {
 
   console.error(err);
 
+  if (err.code === 'P2010' || err.name === 'PrismaClientInitializationError') {
+    return sendError(res, {
+      statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
+      message:
+        'Database not connected',
+    });
+  }
+
   return sendError(res, {
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
