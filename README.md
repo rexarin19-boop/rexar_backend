@@ -26,6 +26,12 @@ npm run db:push
 npm run dev
 ```
 
+On startup the terminal prints the line for **Rexar** app `.env`:
+
+`EXPO_PUBLIC_API_URL=http://192.168.x.x:4000`
+
+Or run anytime: `npm run print-url`
+
 ## Auth modes
 
 | `AUTH_MODE` | JWT secrets needed? | Protected API header |
@@ -76,4 +82,6 @@ Same verify/register, then use `accessToken` / `refreshToken` from response.
 | POST | `/api/v1/auth/register` | No |
 | POST | `/api/v1/auth/refresh` | No |
 | POST | `/api/v1/auth/logout` | No |
-| GET | `/api/v1/auth/me` | Bearer token |
+| GET | `/api/v1/auth/me` | Bearer token (registered user) |
+| GET | `/api/v1/auth/getMe` | Bearer Firebase idToken (user or `null`) |
+| POST | `/api/v1/auth/createMe` | Bearer + `{ displayName }` (Excelrs-style signup) |

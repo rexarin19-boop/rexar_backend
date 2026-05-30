@@ -70,3 +70,35 @@ export async function me(req, res) {
     data: { user },
   });
 }
+
+/** Excelrs-style: Firebase logged in → profile or null */
+export async function getMe(req, res) {
+  const user = await authService.getMeByFirebase(req.firebase);
+
+  return sendSuccess(res, {
+    statusCode: HTTP_STATUS.OK,
+    message: user ? 'Profile found' : 'New user — complete signup',
+    data: { user },
+  });
+}
+
+/** Excelrs-style: first-time profile after OTP */
+export async function createMe(req, res) {
+  const token =
+    req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice(7)
+      : req.body.idToken;
+
+  const result = await authService.createMe({
+    idToken: token,
+    displayName: req.body.displayName,
+    avatarUrl: req.body.avatarUrl ?? null,
+    role: req.body.role,
+  });
+
+  return sendSuccess(res, {
+    statusCode: HTTP_STATUS.CREATED,
+    message: 'Profile created',
+    data: { user: result },
+  });
+}

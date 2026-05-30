@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run db:generate && node --watch src/server.js",
+    "print-url": "node scripts/print-api-url.mjs",
     "postinstall": "prisma generate",
     "start": "node src/server.js",
     "db:generate": "prisma generate",

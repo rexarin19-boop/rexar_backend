@@ -18,3 +18,10 @@ export const refreshBodySchema = z.object({
 export const logoutBodySchema = z.object({
   refreshToken: z.string().optional(),
 });
+
+export const createMeBodySchema = z.object({
+  idToken: z.string().min(10).optional(),
+  displayName: z.string().min(2, 'displayName must be at least 2 characters').max(50),
+  avatarUrl: z.string().url().optional().nullable(),
+  role: z.enum(['PLAYER', 'ORGANIZER']).optional(),
+});

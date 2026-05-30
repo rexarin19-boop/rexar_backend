@@ -182,3 +182,35 @@ export async function getUserById(userId) {
   }
   return sanitizeUser(user);
 }
+
+/** Excelrs-style getMe — returns null if Firebase user not registered yet. */
+export async function getMeByFirebase({ firebaseUid, phone }) {
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [{ firebaseUid }, { phone }],
+    },
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  if (!user.isActive) {
+    throw new AppError('Account is disabled', HTTP_STATUS.FORBIDDEN);
+  }
+
+  if (user.firebaseUid !== firebaseUid) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { firebaseUid },
+    });
+  }
+
+  return sanitizeUser(user);
+}
+
+/** Excelrs-style createMe — same as register after OTP. */
+export async function createMe({ idToken, displayName, avatarUrl, role }) {
+  const session = await registerUser({ idToken, displayName, avatarUrl, role });
+  return session.user;
+}
