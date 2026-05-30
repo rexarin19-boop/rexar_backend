@@ -27,6 +27,7 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  tournaments   Tournament[] @relation("TournamentCreator")
 
   @@map("users")
 }
@@ -43,4 +44,37 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model Tournament {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  createdById           String   @map("created_by_id") @db.ObjectId
+  tournamentName        String   @map("tournament_name")
+  game                  String
+  format                String
+  date                  String
+  time                  String
+  isPublic              Boolean  @default(true) @map("is_public")
+  entryFee              Float?   @map("entry_fee")
+  prizePool             Float    @map("prize_pool")
+  maxParticipants       Int      @map("max_participants")
+  rules                 String?
+  registrationDeadline  String   @map("registration_deadline")
+  allowTeamRegistration Boolean  @default(false) @map("allow_team_registration")
+  autoApprovePlayers    Boolean  @default(true) @map("auto_approve_players")
+  matches               Int
+  roomSize              Int      @map("room_size")
+  map                   String
+  spectatorMode         Boolean  @default(true) @map("spectator_mode")
+  prizeFirst            Float    @map("prize_first")
+  prizeSecond           Float    @map("prize_second")
+  prizeThird            Float    @map("prize_third")
+  bannerUri             String?  @map("banner_uri")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("TournamentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+  @@map("tournaments")
 }
