@@ -26,10 +26,26 @@ export async function login(req, res) {
   });
 }
 
+/** Phone or email + password (password saved at signup). */
+export async function signIn(req, res) {
+  const result = await authService.loginWithPassword({
+    identifier: req.body.identifier,
+    password: req.body.password,
+  });
+
+  return sendSuccess(res, {
+    statusCode: HTTP_STATUS.OK,
+    message: 'Login successful',
+    data: result,
+  });
+}
+
 export async function register(req, res) {
   const result = await authService.registerUser({
     idToken: req.body.idToken,
     displayName: req.body.displayName,
+    email: req.body.email,
+    password: req.body.password,
     avatarUrl: req.body.avatarUrl ?? null,
     role: req.body.role,
   });
@@ -71,7 +87,6 @@ export async function me(req, res) {
   });
 }
 
-/** Excelrs-style: Firebase logged in → profile or null */
 export async function getMe(req, res) {
   const user = await authService.getMeByFirebase(req.firebase);
 
@@ -82,7 +97,6 @@ export async function getMe(req, res) {
   });
 }
 
-/** Excelrs-style: first-time profile after OTP */
 export async function createMe(req, res) {
   const token =
     req.headers.authorization?.startsWith('Bearer ')
@@ -92,6 +106,8 @@ export async function createMe(req, res) {
   const result = await authService.createMe({
     idToken: token,
     displayName: req.body.displayName,
+    email: req.body.email,
+    password: req.body.password,
     avatarUrl: req.body.avatarUrl ?? null,
     role: req.body.role,
   });

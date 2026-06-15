@@ -7,21 +7,22 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import {
   createMeBodySchema,
   registerBodySchema,
+  signInBodySchema,
   verifyBodySchema,
 } from '../../validators/auth.validator.js';
 
 const router = Router();
 
-/** OTP ke baad login — Firebase idToken bhejo */
+/** Login — phone OR email + password (same password from signup) */
+router.post('/sign-in', validateBody(signInBodySchema), asyncHandler(authController.signIn));
+
+/** OTP verify (signup step 1) */
 router.post('/login', validateBody(verifyBodySchema), asyncHandler(authController.login));
 router.post('/verify', validateBody(verifyBodySchema), asyncHandler(authController.login));
 
-/** Naya user — idToken + displayName */
 router.post('/register', validateBody(registerBodySchema), asyncHandler(authController.register));
 
 router.get('/me', authenticate, asyncHandler(authController.me));
-
-/** Excelrs-style (Express instead of Firebase callable) */
 router.get('/getMe', authenticateFirebase, asyncHandler(authController.getMe));
 router.post(
   '/createMe',

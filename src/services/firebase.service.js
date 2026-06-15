@@ -6,13 +6,14 @@ export async function verifyFirebaseIdToken(idToken) {
   try {
     const decoded = await getFirebaseAuth().verifyIdToken(idToken);
 
-    if (!decoded.phone_number) {
-      throw new AppError('Phone number not found in Firebase token', HTTP_STATUS.BAD_REQUEST);
+    if (!decoded.phone_number && !decoded.email) {
+      throw new AppError('Invalid Firebase token', HTTP_STATUS.BAD_REQUEST);
     }
 
     return {
       firebaseUid: decoded.uid,
-      phone: decoded.phone_number,
+      phone: decoded.phone_number ?? null,
+      email: decoded.email ? decoded.email.toLowerCase() : null,
     };
   } catch (error) {
     if (error instanceof AppError) throw error;

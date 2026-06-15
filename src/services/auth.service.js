@@ -1,7 +1,9 @@
-import { prisma } from '../config/prisma.js';
+import { getFirebaseAuth } from '../config/firebase.admin.js';
 import { useFirebaseAuth, useJwtAuth } from '../config/env.js';
+import * as usersDb from '../db/users.js';
 import { HTTP_STATUS } from '../constants/httpStatus.js';
 import { AppError } from '../utils/AppError.js';
+import { hashPassword, verifyPassword } from '../utils/password.js';
 import { verifyFirebaseIdToken } from './firebase.service.js';
 import {
   buildAuthPayload,
@@ -17,6 +19,7 @@ function sanitizeUser(user) {
   return {
     id: user.id,
     phone: user.phone,
+    email: user.email,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     role: user.role,
@@ -43,14 +46,29 @@ async function issueSession(user) {
   };
 }
 
-export async function verifyAndLogin({ idToken }) {
-  const { firebaseUid, phone } = await verifyFirebaseIdToken(idToken);
+/** Login with phone OR email + the password user set at signup. */
+export async function loginWithPassword({ identifier, password }) {
+  const user = await usersDb.findUserByIdentifier(identifier);
 
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [{ firebaseUid }, { phone }],
-    },
-  });
+  if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+    throw new AppError('Wrong phone/email or password', HTTP_STATUS.UNAUTHORIZED);
+  }
+
+  if (!user.isActive) {
+    throw new AppError('Account is disabled', HTTP_STATUS.FORBIDDEN);
+  }
+
+  const customToken = await getFirebaseAuth().createCustomToken(user.firebaseUid);
+
+  return {
+    customToken,
+    user: sanitizeUser(user),
+  };
+}
+
+export async function verifyAndLogin({ idToken }) {
+  const { firebaseUid, phone, email } = await verifyFirebaseIdToken(idToken);
+  const user = await usersDb.findUserByFirebase({ firebaseUid, phone, email });
 
   if (!user) {
     return {
@@ -66,55 +84,67 @@ export async function verifyAndLogin({ idToken }) {
   }
 
   if (user.firebaseUid !== firebaseUid) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { firebaseUid },
-    });
+    await usersDb.updateUser(user.id, { firebaseUid });
   }
-
-  const session = await issueSession(user);
 
   return {
     needsRegistration: false,
-    ...session,
+    ...(await issueSession(user)),
   };
 }
 
-export async function registerUser({ idToken, displayName, avatarUrl, role }) {
+export async function registerUser({ idToken, displayName, email, password, avatarUrl, role }) {
   const { firebaseUid, phone } = await verifyFirebaseIdToken(idToken);
 
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: [{ firebaseUid }, { phone }],
-    },
+  if (!phone) {
+    throw new AppError('Phone verification required before signup', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  if (!password || password.length < 6) {
+    throw new AppError('Password must be at least 6 characters', HTTP_STATUS.BAD_REQUEST);
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const passwordHash = await hashPassword(password);
+  const existing = await usersDb.findExistingUser({
+    firebaseUid,
+    phone,
+    email: normalizedEmail,
   });
 
   if (existing) {
-    throw new AppError('User already registered. Please login.', HTTP_STATUS.CONFLICT);
+    if (!existing.passwordHash) {
+      const user = await usersDb.updateUser(existing.id, {
+        firebaseUid,
+        phone,
+        email: normalizedEmail,
+        displayName,
+        avatarUrl,
+        role: role ?? existing.role ?? 'PLAYER',
+        passwordHash,
+      });
+      return issueSession(user);
+    }
+
+    throw new AppError('Account already exists. Please log in.', HTTP_STATUS.CONFLICT);
   }
 
-  const user = await prisma.user.create({
-    data: {
-      firebaseUid,
-      phone,
-      displayName,
-      avatarUrl,
-      role: role ?? 'PLAYER',
-    },
+  const user = await usersDb.createUser({
+    firebaseUid,
+    phone,
+    email: normalizedEmail,
+    displayName,
+    avatarUrl,
+    role: role ?? 'PLAYER',
+    passwordHash,
   });
 
   return issueSession(user);
 }
 
-/** Load Rexar user from Firebase idToken (used by auth middleware in firebase mode). */
 export async function resolveUserFromFirebaseToken(idToken) {
-  const { firebaseUid, phone } = await verifyFirebaseIdToken(idToken);
-
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [{ firebaseUid }, { phone }],
-    },
-  });
+  const { firebaseUid, phone, email } = await verifyFirebaseIdToken(idToken);
+  const user = await usersDb.findUserByFirebase({ firebaseUid, phone, email });
 
   if (!user) {
     throw new AppError('User not registered', HTTP_STATUS.UNAUTHORIZED);
@@ -142,12 +172,11 @@ export async function refreshSession(refreshToken) {
     throw new AppError('Invalid refresh token', HTTP_STATUS.UNAUTHORIZED);
   }
 
-  const valid = await isRefreshTokenValid(refreshToken);
-  if (!valid) {
+  if (!(await isRefreshTokenValid(refreshToken))) {
     throw new AppError('Refresh token revoked or expired', HTTP_STATUS.UNAUTHORIZED);
   }
 
-  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  const user = await usersDb.findUserById(payload.sub);
   if (!user || !user.isActive) {
     throw new AppError('User not found', HTTP_STATUS.UNAUTHORIZED);
   }
@@ -163,54 +192,37 @@ export async function refreshSession(refreshToken) {
 
 export async function logoutUser(refreshToken) {
   if (useFirebaseAuth) {
-    return {
-      loggedOut: true,
-      note: 'Sign out on the app with Firebase Auth.signOut()',
-    };
+    return { loggedOut: true, note: 'Sign out on the app with Firebase Auth.signOut()' };
   }
 
-  if (refreshToken) {
-    await revokeRefreshToken(refreshToken);
-  }
+  if (refreshToken) await revokeRefreshToken(refreshToken);
   return { loggedOut: true };
 }
 
 export async function getUserById(userId) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
-  }
+  const user = await usersDb.findUserById(userId);
+  if (!user) throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
   return sanitizeUser(user);
 }
 
-/** Excelrs-style getMe — returns null if Firebase user not registered yet. */
-export async function getMeByFirebase({ firebaseUid, phone }) {
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [{ firebaseUid }, { phone }],
-    },
+export async function getMeByFirebase({ firebaseUid, phone, email }) {
+  const existing = await usersDb.findExistingUser({
+    firebaseUid,
+    phone,
+    email: email?.toLowerCase(),
   });
 
-  if (!user) {
-    return null;
+  if (!existing?.email || !existing.passwordHash) return null;
+  if (!existing.isActive) throw new AppError('Account is disabled', HTTP_STATUS.FORBIDDEN);
+
+  if (existing.firebaseUid !== firebaseUid) {
+    await usersDb.updateUser(existing.id, { firebaseUid });
   }
 
-  if (!user.isActive) {
-    throw new AppError('Account is disabled', HTTP_STATUS.FORBIDDEN);
-  }
-
-  if (user.firebaseUid !== firebaseUid) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { firebaseUid },
-    });
-  }
-
-  return sanitizeUser(user);
+  return sanitizeUser(existing);
 }
 
-/** Excelrs-style createMe — same as register after OTP. */
-export async function createMe({ idToken, displayName, avatarUrl, role }) {
-  const session = await registerUser({ idToken, displayName, avatarUrl, role });
+export async function createMe({ idToken, displayName, email, password, avatarUrl, role }) {
+  const session = await registerUser({ idToken, displayName, email, password, avatarUrl, role });
   return session.user;
 }

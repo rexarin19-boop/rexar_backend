@@ -8,7 +8,7 @@ function getBearerToken(req) {
   return header.slice(7);
 }
 
-/** Verifies Firebase idToken only — user may not exist in DB yet (Excelrs-style getMe). */
+/** Verifies Firebase idToken only — user may not exist in DB yet (getMe during signup). */
 export async function authenticateFirebase(req, res, next) {
   const token = getBearerToken(req);
 
@@ -20,8 +20,8 @@ export async function authenticateFirebase(req, res, next) {
   }
 
   try {
-    const { firebaseUid, phone } = await verifyFirebaseIdToken(token);
-    req.firebase = { firebaseUid, phone };
+    const { firebaseUid, phone, email } = await verifyFirebaseIdToken(token);
+    req.firebase = { firebaseUid, phone, email };
     return next();
   } catch {
     return sendError(res, {

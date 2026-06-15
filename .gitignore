@@ -7,5 +7,3 @@ coverage/
 *.log
 secrets/
 .firebase/
-prisma/*.db
-prisma/*.db-journal

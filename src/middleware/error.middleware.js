@@ -21,11 +21,10 @@ export function errorHandler(err, req, res, _next) {
 
   console.error(err);
 
-  if (err.code === 'P2010' || err.name === 'PrismaClientInitializationError') {
+  if (err.name === 'MongoServerError' || err.name === 'MongoNetworkError') {
     return sendError(res, {
       statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE,
-      message:
-        'Database not connected',
+      message: 'Database error',
     });
   }
 

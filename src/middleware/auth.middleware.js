@@ -75,3 +75,32 @@ export function authorize(...roles) {
     next();
   };
 }
+
+/** Sets req.user when token is valid; continues anonymously otherwise. */
+export async function optionalAuthenticate(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) return next();
+
+  try {
+    if (useFirebaseAuth) {
+      const user = await resolveUserFromFirebaseToken(token);
+      req.user = {
+        id: user.id,
+        role: user.role,
+        phone: user.phone,
+        firebaseUid: user.firebaseUid,
+      };
+    } else if (useJwtAuth) {
+      const payload = verifyAccessToken(token);
+      req.user = {
+        id: payload.sub,
+        role: payload.role,
+        phone: payload.phone,
+      };
+    }
+  } catch {
+    // ignore invalid token for public reads
+  }
+
+  return next();
+}
