@@ -13,6 +13,8 @@ function getLanIPv4() {
   return null;
 }
 
+//testing
+
 const lan = getLanIPv4();
 
 console.log('\n--- Rexar API URLs ---\n');
