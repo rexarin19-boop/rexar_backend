@@ -27,39 +27,60 @@ npm run db:test
 
 App `.env` (Rexar mobile): `API_URL=http://localhost:4000` — run `npm run android` (auto adb-reverse).
 
-## Deploy (branch-based — no Dockerfile / no yaml)
+## Deploy (CLI — single `master` branch)
 
-Project: **`rexar-ea718`** | Region: **`asia-south1`**
+Project: **`rexar-ea718`** | Region: **`asia-south1`** | Service: **`rexar-api`**
 
-Sirf **Git branch** se control — koi `cloudbuild.yaml` ya `Dockerfile` maintain nahi karna.
+Sirf **`master`** branch — staging/main alag nahi. Sab code + deploy yahi se.
 
-| Branch | Cloud Run service | Use |
-|--------|-------------------|-----|
-| `staging` | `rexar-api-staging` | v0.1 testing |
-| `main` | `rexar-api` | live (jab stable ho) |
+### Git setup (ek baar)
 
-### 1) `staging` branch banao (ek baar)
-
-```bash
-git checkout -b staging
-git push -u origin staging
+```powershell
+git checkout staging
+git checkout -b master
+git push -u origin master
 ```
 
-Daily kaam `staging` par karo. Jab sab theek ho → `main` mein merge.
+Baad mein daily kaam:
 
-### 2) Cloud Run → Connect repository (staging)
+```powershell
+git checkout master
+git push origin master
+```
 
-1. [Cloud Run](https://console.cloud.google.com/run?project=rexar-ea718) → **Connect repository**
-2. GitHub connect → repo **`zeeshan8302/Rexar_BackEnd`**
-3. Settings:
-   - **Branch:** `staging`
-   - **Build type:** Node.js (Dockerfile mat choose karo)
-   - **Service name:** `rexar-api-staging`
-   - **Region:** `asia-south1`
-   - **Authentication:** Allow unauthenticated
-   - **Port:** `8080` (Cloud Run default — app `process.env.PORT` use karti hai)
+Purani `staging` / `main` branches delete karna optional hai.
 
-4. **Variables & Secrets** (service edit → first deploy se pehle):
+### Deploy — CLI se (GitHub browser login nahi)
+
+Browser wala **Connect repository / GitHub OTP** band karo. PC se seedha deploy:
+
+**Ek baar install + login (Google account — GitHub nahi):**
+
+```powershell
+winget install Google.CloudSDK
+# terminal restart
+gcloud auth login
+gcloud config set project rexar-ea718
+```
+
+**Har deploy par sirf ye command** (`Rexar_BackEnd` folder se):
+
+```powershell
+.\scripts\deploy-cloud-run.ps1
+```
+
+Script automatically:
+- `.env` se `DATABASE_URL` leta hai
+- `secrets/firebase-service-account.json` se Firebase keys leta hai
+- Cloud Run par deploy karta hai (`rexar-api`, region `asia-south1`)
+
+> GitHub repo connect karne ki zaroorat nahi — baar baar OTP nahi aayega.
+
+### Optional — GitHub se auto-deploy
+
+Agar baad mein har `git push master` par auto-deploy chahiye, tab Cloud Run → Connect repository → branch **`master`**.
+
+### Cloud Run secrets (reference)
 
 | Name | Type | Value |
 |------|------|-------|
@@ -74,42 +95,26 @@ Daily kaam `staging` par karo. Jab sab theek ho → `main` mein merge.
 
 > Local dev mein `FIREBASE_SERVICE_ACCOUNT_PATH` file use hoti hai. Cloud Run par **env vars / secrets** use karo — file path kaam nahi karegi.
 
-5. Deploy → URL copy karo, e.g. `https://rexar-api-staging-xxxxx.a.run.app`
+Deploy ke baad URL copy karo, e.g. `https://rexar-api-xxxxx.a.run.app`
 
-6. Test: `https://YOUR-URL/health` → `"db": "connected"`
+Test: `https://YOUR-URL/health` → `"db": "connected"`
 
-Ab har **`staging` push/merge** par API khud redeploy ho jayegi.
-
-### 3) Production (`main`) — baad mein
-
-Jab staging stable ho, wahi steps dobara:
-
-- Branch: **`main`**
-- Service name: **`rexar-api`**
-- Same secrets (ya alag prod DB baad mein)
-
-### 4) Mobile APK (staging test)
+### Mobile APK
 
 `Rexar/.env`:
 
 ```
-REXAR_PROD_API_URL=https://rexar-api-staging-xxxxx.a.run.app
+REXAR_PROD_API_URL=https://rexar-api-xxxxx.a.run.app
 ```
 
 ```bash
 npm run build:apk:prod
 ```
 
-APK testers ko bhejo — Play Store ki zaroorat nahi v0.1 ke liye.
-
 ### Daily workflow
 
 ```
-feature branch → PR → merge staging → API auto-deploy (staging URL)
-       ↓
-test APK + app on phone
-       ↓
-merge staging → main → API auto-deploy (prod URL) → new prod APK
+master par code push → .\scripts\deploy-cloud-run.ps1 → APK rebuild → test
 ```
 
 ## Auth mode
